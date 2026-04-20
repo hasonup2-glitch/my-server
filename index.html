@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>SOFTWARE ENGINEER 23 | HUB</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root { --main-blue: #00d4ff; --active-green: #00ff88; --dark-bg: #050505; --glass: rgba(15, 15, 15, 0.95); }
+        body, html { margin: 0; padding: 0; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; background: var(--dark-bg); color: white; }
+
+        .master-bg {
+            position: fixed; inset: 0;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+            z-index: -1;
+        }
+        .master-bg::after {
+            content: ""; position: absolute; inset: 0;
+            background-image: linear-gradient(rgba(0, 212, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .auth-overlay { position: fixed; inset: 0; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.9); z-index: 1000; }
+        .auth-card { background: var(--glass); padding: 50px; border-radius: 20px; border: 1px solid var(--main-blue); text-align: center; box-shadow: 0 0 40px rgba(0, 212, 255, 0.2); }
+        
+        .logo-23 { font-size: 100px; font-weight: 900; margin: 0; color: #fff; text-shadow: 0 0 20px var(--main-blue); }
+        input { background: #111; border: 1px solid #333; color: white; padding: 15px; border-radius: 8px; width: 280px; text-align: center; margin-bottom: 20px; outline: none; font-size: 18px; }
+        .btn-action { background: var(--main-blue); color: #000; padding: 12px 60px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        .btn-action:hover { transform: scale(1.05); box-shadow: 0 0 20px var(--main-blue); }
+
+        #server-interface { display: none; height: 100vh; width: 100vw; flex-direction: row; }
+        
+        #sidebar-users { width: 280px; background: rgba(5, 5, 5, 0.8); border-left: 1px solid #222; padding: 20px; backdrop-filter: blur(10px); }
+        .user-tag { padding: 12px; background: rgba(0, 212, 255, 0.1); border-radius: 8px; margin-bottom: 10px; border-right: 4px solid var(--main-blue); font-weight: bold; }
+
+        .center-zone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        .mic-btn { width: 180px; height: 180px; border-radius: 50%; background: none; border: 6px solid var(--main-blue); color: var(--main-blue); font-size: 80px; cursor: pointer; transition: 0.4s; outline: none; }
+        .mic-btn.active { border-color: var(--active-green); color: var(--active-green); box-shadow: 0 0 60px var(--active-green); transform: scale(1.1); }
+
+        #sidebar-chat { width: 350px; background: rgba(5, 5, 5, 0.8); border-right: 1px solid #222; display: flex; flex-direction: column; }
+        #msg-box { flex: 1; overflow-y: auto; padding: 20px; list-style: none; margin: 0; }
+        #msg-box li { margin-bottom: 10px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; font-size: 14px; word-break: break-word; }
+        .chat-input-area { padding: 20px; background: #000; }
+        .chat-input-area input { width: 100%; box-sizing: border-box; margin: 0; }
+
+        #welcome-splash { position: fixed; inset: 0; background: #000; display: none; justify-content: center; align-items: center; z-index: 2000; font-size: 3rem; font-weight: 900; color: var(--main-blue); text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="master-bg"></div>
+
+    <div id="step-pass" class="auth-overlay">
+        <div class="auth-card">
+            <h1 class="logo-23">23</h1>
+            <p style="letter-spacing: 5px; color: #666;">HUB ACCESS</p>
+            <input type="password" id="pass-val" placeholder="كلمة السر">
+            <button class="btn-action" onclick="goStep2()">ENTER</button>
+        </div>
+    </div>
+    <div id="step-name" class="auth-overlay" style="display: none;">
+        <div class="auth-card">
+            <h2 style="color: var(--main-blue);">تأكيد الهوية</h2>
+            <input type="text" id="name-val" placeholder="اسمك المستعار">
+            <button class="btn-action" onclick="finishAll()">CONFIRM</button>
+        </div>
+    </div>
+
+    <div id="welcome-splash"><div id="welcome-txt"></div></div>
+
+    <div id="server-interface">
+        <div id="sidebar-users">
+            <h3 style="color: var(--main-blue); margin-top: 0;">ENGINEERS</h3>
+            <div id="user-display"></div>
+        </div>
+
+        <div class="center-zone">
+            <button id="mic-trigger" class="mic-btn" onclick="toggleMic()">🎤</button>
+            <div id="status" style="margin-top:20px; font-weight:bold; letter-spacing:2px;">STANDBY</div>
+        </div>
+
+        <div id="sidebar-chat">
+            <h3 style="padding: 20px; margin: 0; color: var(--main-blue);">LOGS</h3>
+            <ul id="msg-box"></ul>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="رسالة..." onkeydown="if(event.key==='Enter') sendMsg()">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket; 
+        let myName = ""; 
+        let isMicOn = false;
+
+        function goStep2() {
+            // تأكد من المسافة في كلمة السر "soft 23"
+            if (document.getElementById('pass-val').value === "soft 23") {
+                document.getElementById('step-pass').style.display = 'none';
+                document.getElementById('step-name').style.display = 'flex';
+            } else { 
+                alert("كلمة السر خاطئة!"); 
+            }
+        }
+
+        function finishAll() {
+            const n = document.getElementById('name-val').value;
+            if (n.trim() !== "") {
+                myName = n;
+                document.getElementById('step-name').style.display = 'none';
+                const s = document.getElementById('welcome-splash');
+                document.getElementById('welcome-txt').innerText = "WELCOME " + myName;
+                s.style.display = 'flex';
+                setTimeout(() => {
+                    s.style.display = 'none';
+                    document.getElementById('server-interface').style.display = 'flex';
+                    startApp();
+                }, 2000);
+            }
+        }
+
+        function toggleMic() {
+            isMicOn = !isMicOn;
+            const btn = document.getElementById('mic-trigger');
+            const st = document.getElementById('status');
+            if (isMicOn) { 
+                btn.classList.add('active'); 
+                st.innerText = "ACTIVE"; 
+                st.style.color = "#00ff88"; 
+            } else { 
+                btn.classList.remove('active'); 
+                st.innerText = "STANDBY"; 
+                st.style.color = "white"; 
+            }
+        }
+
+        function startApp() {
+            try {
+                // ملاحظة: io() ستفشل إذا لم يكن هناك سيرفر Node.js مرفوع عليه الكود
+                // لكننا سنضعها داخل try/catch لتجنب توقف الصفحة
+                socket = io(); 
+
+                socket.on('connect_error', () => {
+                    console.warn("السيرفر غير متصل (تأكد من تشغيل Node.js server)");
+                });
+
+                socket.emit('join-server', myName);
+
+                socket.on('update-users', (u) => {
+                    const div = document.getElementById('user-display');
+                    div.innerHTML = '';
+                    u.forEach(x => { 
+                        div.innerHTML += `<div class="user-tag">${x}</div>`; 
+                    });
+                });
+
+                socket.on('createMessage', (d) => {
+                    addMessageToBox(d.user, d.msg);
+                });
+            } catch (e) {
+                console.error("Socket.io Error:", e);
+            }
+        }
+
+        function addMessageToBox(user, msg) {
+            const li = document.createElement('li');
+         li.innerHTML = '<strong style="color:var(--main-blue)">' + user + ':</strong> ' + msg;
+            const box = document.getElementById('msg-box');
+            box.appendChild(li);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function sendMsg() {
+            const inp = document.getElementById('chat-input');
+            const val = inp.value.trim();
+            if(val !== "") {
+                if(socket && socket.connected) {
+                    socket.emit('message', val);
+                } else {
+                    // تجربة محلية (Offline mode) لإظهار الرسائل حتى بدون سيرفر
+                    addMessageToBox(myName, val);
+                }
+                inp.value = ''; 
+            }
+        }
+    </script>
+</body>
+</html>
