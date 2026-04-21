@@ -41,15 +41,14 @@
         #msg-box li { margin-bottom: 10px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; font-size: 14px; word-break: break-word; }
         .chat-input-area { padding: 20px; background: #000; }
         .chat-input-area input { width: 100%; box-sizing: border-box; margin: 0; }
-<audio id="remoteAudio" autoplay></audio>
-        
+
         #welcome-splash { position: fixed; inset: 0; background: #000; display: none; justify-content: center; align-items: center; z-index: 2000; font-size: 3rem; font-weight: 900; color: var(--main-blue); text-align: center; }
     </style>
 </head>
 <body>
-    <div class="master-bg"></div>
-
-    <div id="step-pass" class="auth-overlay">
+    <div class="master-bg"></
+div>
+<div id="step-pass" class="auth-overlay">
         <div class="auth-card">
             <h1 class="logo-23">23</h1>
             <p style="letter-spacing: 5px; color: #666;">HUB ACCESS</p>
@@ -135,11 +134,9 @@
 
         function startApp() {
             try {
-                // ملاحظة: io() ستفشل إذا لم يكن هناك سيرفر Node.js مرفوع عليه الكود
-                // لكننا سنضعها داخل try/catch لتجنب توقف الصفحة
+             
                 socket = io(); 
-
-                socket.on('connect_error', () => {
+               socket.on('connect_error', () => {
                     console.warn("السيرفر غير متصل (تأكد من تشغيل Node.js server)");
                 });
 
@@ -149,11 +146,10 @@
                     const div = document.getElementById('user-display');
                     div.innerHTML = '';
                     u.forEach(x => { 
-                        div.innerHTML += `<div class="user-tag">${x}</div>`; 
+                        div.innerHTML += <div class="user-tag">${x}</div>; 
                     });
                 });
-
-                socket.on('createMessage', (d) => {
+socket.on('createMessage', (d) => {
                     addMessageToBox(d.user, d.msg);
                 });
             } catch (e) {
@@ -166,19 +162,78 @@
          li.innerHTML = '<strong style="color:var(--main-blue)">' + user + ':</strong> ' + msg;
             const box = document.getElementById('msg-box');
             box.appendChild(li);
+            box.scrollTop = box.
+                catch(e => console.warn("Audio error:", e));
+                    }
+                });
+
+                socket.on('update-users', (users) => {
+                    const div = document.getElementById('user-display');
+                    div.innerHTML = '';
+                    users.forEach(user => { 
+                        div.innerHTML += <div class="user-tag">${user}</div>; 
+                    });
+                });
+
+                socket.on('createMessage', (data) => {
+                    addMessageToBox(data.user, data.msg);
+                });
+            } catch (e) { console.error(e); }
+        }
+
+        async function toggleMic() {
+            isMicOn = !isMicOn;
+            const btn = document.getElementById('mic-trigger');
+            const st = document.getElementById('status');
+            
+            if (isMicOn) { 
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const mediaRecorder = new MediaRecorder(localStream);
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0 && socket) {
+                            const reader = new FileReader();
+                            reader.readAsDataURL(event.data);
+                            reader.onloadend = () => {
+                                socket.emit('audio-stream', { user: myName, audio: reader.result });
+                            };
+                        }
+                    };
+                    mediaRecorder.start(500); 
+                    btn.classList.add('active'); 
+                    st.innerText = "AUDIO ACTIVE"; 
+                    st.style.color = "#00ff88"; 
+                } catch (err) {
+                    alert("الميكروفون غير متاح: " + err.message);
+                    isMicOn = false;
+                }
+            } else { 
+                if (localStream) localStream.getTracks().forEach(track => track.stop());
+                btn.classList.remove('active'); 
+                st.innerText = "STANDBY"; 
+                st.style.color = "#444"; 
+            }
+        }
+
+        function addMessageToBox(user, msg) {
+            const li = document.createElement('li');
+            const isMe = (user === myName);
+            li.style.alignSelf = isMe ? 'flex-end' : 'flex-start';
+            li.style.background = isMe ? 'rgba(0, 212, 255, 0.1)' : 'rgba(255, 255, 255, 0.03)';
+            li.style.borderRight = isMe ? '2px solid var(--main-blue)' : 'none';
+            li.style.borderLeft = !isMe ? '2px solid #444' : 'none';
+            li.innerHTML = <strong style="color:var(--main-blue); display:block; font-size:11px; margin-bottom:5px;">${user}</strong> ${msg};
+            const box = document.getElementById('msg-box');
+            box.appendChild(li);
             box.scrollTop = box.scrollHeight;
         }
 
         function sendMsg() {
             const inp = document.getElementById('chat-input');
             const val = inp.value.trim();
-            if(val !== "") {
-                if(socket && socket.connected) {
-                    socket.emit('message', val);
-                } else {
-                    // تجربة محلية (Offline mode) لإظهار الرسائل حتى بدون سيرفر
-                    addMessageToBox(myName, val);
-                }
+            if(val !== "" && socket) {
+                socket.emit('message', val);
                 inp.value = ''; 
             }
         }
