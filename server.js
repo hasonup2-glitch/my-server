@@ -4,7 +4,8 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
-// هذه السطر مهم جداً عشان الصور والملفات تظهر
+const PORT = process.env.PORT || 3000;
+
 app.use(express.static(__dirname));
 
 app.get('/', (req, res) => {
@@ -20,6 +21,10 @@ io.on('connection', (socket) => {
         io.emit('update-users', users);
     });
 
+    socket.on('audio-stream', (data) => {
+        socket.broadcast.emit('audio-stream', data);
+    });
+
     socket.on('message', (msg) => {
         io.emit('createMessage', { msg: msg, user: socket.username });
     });
@@ -30,6 +35,6 @@ io.on('connection', (socket) => {
     });
 });
 
-http.listen(3000, () => {
-    console.log('Server is running on http://localhost:3000');
+http.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
